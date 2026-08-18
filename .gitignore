@@ -1,0 +1,41 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Uploaded documents
+data/uploads/
+
+# FAISS generated files
+data/faiss/
+
+# Python build files
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+
+# Node
+node_modules/
+
+# Frontend build
+apps/frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
