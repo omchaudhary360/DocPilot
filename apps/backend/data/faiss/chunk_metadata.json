@@ -425,5 +425,47 @@
     "page_number": 2,
     "chunk_index": 2,
     "added_at": "2026-08-20T21:05:37.497053"
+  },
+  "294": {
+    "document_id": 34,
+    "position": 61,
+    "page_number": 1,
+    "chunk_index": 0,
+    "added_at": "2026-08-20T21:22:39.373808"
+  },
+  "295": {
+    "document_id": 34,
+    "position": 62,
+    "page_number": 1,
+    "chunk_index": 1,
+    "added_at": "2026-08-20T21:22:39.373808"
+  },
+  "296": {
+    "document_id": 34,
+    "position": 63,
+    "page_number": 2,
+    "chunk_index": 2,
+    "added_at": "2026-08-20T21:22:39.373808"
+  },
+  "297": {
+    "document_id": 35,
+    "position": 64,
+    "page_number": 1,
+    "chunk_index": 0,
+    "added_at": "2026-08-20T21:24:01.654371"
+  },
+  "298": {
+    "document_id": 35,
+    "position": 65,
+    "page_number": 1,
+    "chunk_index": 1,
+    "added_at": "2026-08-20T21:24:01.654371"
+  },
+  "299": {
+    "document_id": 35,
+    "position": 66,
+    "page_number": 2,
+    "chunk_index": 2,
+    "added_at": "2026-08-20T21:24:01.654371"
   }
 }
