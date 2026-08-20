@@ -12,7 +12,7 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-MODEL_NAME = os.getenv("LLM_MODEL", "gemini-2.0-flash")
+MODEL_NAME = os.getenv("LLM_MODEL", "gemini-3.6-flash")
 
 NOT_FOUND_MESSAGE = (
     "I couldn't find this information in the uploaded document."
