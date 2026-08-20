@@ -1,133 +1,886 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
 import "./App.css";
-import { uploadDocument, askQuestion } from "./services/api";
+
+import Logo from "./components/Logo";
+
+import {
+  uploadDocument,
+  createConversation,
+  getConversations,
+  getConversation,
+  deleteConversation,
+  askQuestion,
+} from "./services/api";
+
 
 function App() {
-  const [file, setFile] = useState(null);
+
+  // =========================================
+  // DOCUMENT
+  // =========================================
+
   const [document, setDocument] = useState(null);
 
-  const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState([]);
 
-  const [uploading, setUploading] = useState(false);
-  const [asking, setAsking] = useState(false);
-  const [error, setError] = useState("");
+  // =========================================
+  // CONVERSATIONS
+  // =========================================
 
-  const handleFileChange = async (event) => {
-    const selectedFile = event.target.files[0];
+  const [conversationId, setConversationId] =
+    useState(null);
 
-    if (!selectedFile) {
-      return;
-    }
+  const [conversations, setConversations] =
+    useState([]);
 
-    setFile(selectedFile);
-    setError("");
-    setDocument(null);
+
+  // =========================================
+  // CHAT
+  // =========================================
+
+  const [messages, setMessages] =
+    useState([]);
+
+  const [question, setQuestion] =
+    useState("");
+
+
+  // =========================================
+  // UI
+  // =========================================
+
+  const [activeView, setActiveView] =
+    useState("documents");
+
+  const [uploading, setUploading] =
+    useState(false);
+
+  const [asking, setAsking] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+
+  // =========================================
+  // REFS
+  // =========================================
+
+  const messagesEndRef =
+    useRef(null);
+
+  const inputRef =
+    useRef(null);
+
+  const chatWindowRef =
+    useRef(null);
+
+
+  // =========================================
+  // LOAD CONVERSATIONS
+  // =========================================
+
+  useEffect(() => {
+    loadConversations();
+  }, []);
+
+
+  async function loadConversations() {
 
     try {
-      setUploading(true);
 
-      const result = await uploadDocument(selectedFile);
+      const data =
+        await getConversations();
 
-      setDocument(result);
-    } catch (err) {
-      setError(err.message);
-      setFile(null);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleAsk = async () => {
-    if (!question.trim() || asking) {
-      return;
-    }
-
-    const currentQuestion = question.trim();
-
-    setQuestion("");
-    setError("");
-
-    setMessages((previous) => [
-      ...previous,
-      {
-        type: "user",
-        text: currentQuestion,
-      },
-    ]);
-
-    try {
-      setAsking(true);
-
-      const result = await askQuestion(
-        currentQuestion,
-        document.document_id
+      setConversations(
+        Array.isArray(data)
+          ? data
+          : []
       );
 
-      setMessages((previous) => [
-        ...previous,
-        {
-          type: "assistant",
-          text: result.answer,
-          sources: result.sources || [],
-        },
-      ]);
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setAsking(false);
+
+      console.error(
+        "Failed to load conversations:",
+        err
+      );
+
     }
-  };
+  }
+
+
+  // =========================================
+  // AUTO SCROLL CHAT
+  // =========================================
+
+  useEffect(() => {
+
+    const timer = setTimeout(() => {
+
+      const chatWindow =
+        chatWindowRef.current;
+
+      if (chatWindow) {
+
+        chatWindow.scrollTo({
+          top: chatWindow.scrollHeight,
+          behavior: "smooth",
+        });
+
+      }
+
+    }, 50);
+
+    return () =>
+      clearTimeout(timer);
+
+  }, [messages, asking]);
+
+
+  // =========================================
+  // FOCUS INPUT
+  // =========================================
+
+  useEffect(() => {
+
+    if (
+      document &&
+      conversationId &&
+      activeView === "documents"
+    ) {
+
+      const timer = setTimeout(() => {
+
+        inputRef.current?.focus();
+
+      }, 100);
+
+      return () =>
+        clearTimeout(timer);
+    }
+
+  }, [
+    document,
+    conversationId,
+    activeView,
+  ]);
+
+
+  // =========================================
+  // UPLOAD DOCUMENT
+  // =========================================
+
+  async function handleFileChange(event) {
+
+    const file =
+      event.target.files?.[0];
+
+    if (!file) return;
+
+
+    if (
+      file.type !== "application/pdf"
+    ) {
+
+      setError(
+        "Please upload a PDF file."
+      );
+
+      event.target.value = "";
+
+      return;
+    }
+
+
+    setError("");
+    setUploading(true);
+
+
+    try {
+
+      const result =
+        await uploadDocument(file);
+
+
+      const documentId =
+        result.document_id ||
+        result.id;
+
+
+      if (!documentId) {
+
+        throw new Error(
+          "Document ID was not returned by the server."
+        );
+
+      }
+
+
+      const uploadedDocument = {
+
+        id: documentId,
+
+        name:
+          result.file_name ||
+          result.original_name ||
+          file.name,
+
+        size: file.size,
+
+        status:
+          result.status ||
+          "processed",
+
+      };
+
+
+      setDocument(
+        uploadedDocument
+      );
+
+
+      // =====================================
+      // CREATE FRESH CONVERSATION
+      // =====================================
+
+      const conversation =
+        await createConversation(
+          "New Conversation",
+          documentId
+        );
+
+
+      setConversationId(
+        conversation.id
+      );
+
+
+      setMessages([]);
+      setQuestion("");
+
+
+      await loadConversations();
+
+
+      setActiveView(
+        "documents"
+      );
+
+
+    } catch (err) {
+
+      console.error(err);
+
+      setError(
+        err.message ||
+        "Document upload failed."
+      );
+
+    } finally {
+
+      setUploading(false);
+
+      event.target.value = "";
+
+    }
+  }
+
+
+  // =========================================
+  // NEW CONVERSATION
+  // =========================================
+
+  async function handleNewConversation() {
+
+    setError("");
+
+    setMessages([]);
+
+    setQuestion("");
+
+
+    if (!document) {
+
+      setConversationId(null);
+
+      setActiveView(
+        "documents"
+      );
+
+      return;
+    }
+
+
+    try {
+
+      const conversation =
+        await createConversation(
+          "New Conversation",
+          document.id
+        );
+
+
+      setConversationId(
+        conversation.id
+      );
+
+
+      await loadConversations();
+
+
+      setActiveView(
+        "documents"
+      );
+
+
+      setTimeout(() => {
+
+        inputRef.current?.focus();
+
+      }, 100);
+
+
+    } catch (err) {
+
+      console.error(err);
+
+      setError(
+        err.message ||
+        "Could not create a new conversation."
+      );
+
+    }
+  }
+
+
+  // =========================================
+  // OPEN CONVERSATION
+  // =========================================
+
+  async function openConversation(
+    conversation
+  ) {
+
+    try {
+
+      setError("");
+
+      setAsking(false);
+
+
+      const fullConversation =
+        await getConversation(
+          conversation.id
+        );
+
+
+      setConversationId(
+        fullConversation.id
+      );
+
+
+      // =====================================
+      // RESTORE MESSAGES
+      // =====================================
+
+      const restoredMessages =
+        (
+          fullConversation.messages ||
+          []
+        ).map((message) => ({
+
+          id:
+            message.id,
+
+          role:
+            message.role,
+
+          content:
+            message.content,
+
+          sources:
+            message.sources || [],
+
+        }));
+
+
+      setMessages(
+        restoredMessages
+      );
+
+
+      // =====================================
+      // RESTORE DOCUMENT
+      // =====================================
+
+      if (
+        fullConversation.document_id
+      ) {
+
+        setDocument({
+
+          id:
+            fullConversation.document_id,
+
+          name:
+            fullConversation.document_name ||
+            conversation.document_name ||
+            "Document",
+
+          size: 0,
+
+          status:
+            "processed",
+
+        });
+
+      }
+
+
+      setQuestion("");
+
+      setActiveView(
+        "documents"
+      );
+
+
+    } catch (err) {
+
+      console.error(err);
+
+      setError(
+        err.message ||
+        "Could not open conversation."
+      );
+
+    }
+  }
+
+
+  // =========================================
+  // ASK QUESTION
+  // =========================================
+
+  async function handleAsk(
+    customQuestion = null
+  ) {
+
+    const text =
+      (
+        customQuestion ??
+        question
+      ).trim();
+
+
+    if (!text) return;
+
+
+    if (!document) {
+
+      setError(
+        "Please upload a document first."
+      );
+
+      return;
+    }
+
+
+    if (!conversationId) {
+
+      setError(
+        "Please start a conversation first."
+      );
+
+      return;
+    }
+
+
+    if (asking) return;
+
+
+    setError("");
+
+
+    // =====================================
+    // CLEAR INPUT
+    // =====================================
+
+    setQuestion("");
+
+
+    // =====================================
+    // USER MESSAGE
+    // =====================================
+
+    const userMessage = {
+
+      id:
+        `user-${Date.now()}-${Math.random()}`,
+
+      role:
+        "user",
+
+      content:
+        text,
+
+      sources:
+        [],
+
+    };
+
+
+    setMessages(
+      (previous) => [
+        ...previous,
+        userMessage,
+      ]
+    );
+
+
+    setAsking(true);
+
+
+    try {
+
+      const result =
+        await askQuestion(
+          text,
+          document.id,
+          conversationId,
+          3
+        );
+
+
+      // ===================================
+      // ASSISTANT MESSAGE
+      // ===================================
+
+      const assistantMessage = {
+
+        id:
+          `assistant-${Date.now()}-${Math.random()}`,
+
+        role:
+          "assistant",
+
+        content:
+          result.answer ||
+          "I could not generate an answer.",
+
+        sources:
+          result.sources || [],
+
+      };
+
+
+      setMessages(
+        (previous) => [
+          ...previous,
+          assistantMessage,
+        ]
+      );
+
+
+      // ===================================
+      // UPDATE CONVERSATION LIST
+      // ===================================
+
+      await loadConversations();
+
+
+    } catch (err) {
+
+      console.error(err);
+
+
+      setError(
+        err.message ||
+        "Failed to get an answer."
+      );
+
+
+      setMessages(
+        (previous) => [
+
+          ...previous,
+
+          {
+            id:
+              `error-${Date.now()}`,
+
+            role:
+              "assistant",
+
+            content:
+              "I couldn't process that question. Please try again.",
+
+            sources:
+              [],
+
+            isError:
+              true,
+          },
+
+        ]
+      );
+
+
+    } finally {
+
+      setAsking(false);
+
+
+      setTimeout(() => {
+
+        inputRef.current?.focus();
+
+      }, 100);
+
+    }
+  }
+
+
+  // =========================================
+  // ENTER TO SEND
+  // =========================================
+
+  function handleKeyDown(event) {
+
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey
+    ) {
+
+      event.preventDefault();
+
+      if (
+        !asking &&
+        question.trim()
+      ) {
+
+        handleAsk();
+
+      }
+
+    }
+
+  }
+
+
+  // =========================================
+  // DELETE CONVERSATION
+  // =========================================
+
+  async function handleDeleteConversation(
+    event,
+    id
+  ) {
+
+    event.stopPropagation();
+
+
+    try {
+
+      await deleteConversation(id);
+
+
+      setConversations(
+        (previous) =>
+          previous.filter(
+            (item) =>
+              item.id !== id
+          )
+      );
+
+
+      if (
+        conversationId === id
+      ) {
+
+        setConversationId(null);
+
+        setMessages([]);
+
+        setQuestion("");
+
+      }
+
+
+    } catch (err) {
+
+      console.error(err);
+
+      setError(
+        err.message ||
+        "Could not delete conversation."
+      );
+
+    }
+  }
+
+
+  // =========================================
+  // FILE SIZE
+  // =========================================
+
+  function formatFileSize(bytes) {
+
+    if (!bytes) return "";
+
+    if (
+      bytes < 1024 * 1024
+    ) {
+
+      return `${Math.round(
+        bytes / 1024
+      )} KB`;
+
+    }
+
+    return `${(
+      bytes /
+      (1024 * 1024)
+    ).toFixed(2)} MB`;
+
+  }
+
+
+  // =========================================
+  // SUGGESTIONS
+  // =========================================
+
+  const suggestions = [
+
+    "Summarize this document",
+
+    "What are the key points?",
+
+    "Explain this document",
+
+  ];
+
+
+  // =========================================
+  // RENDER
+  // =========================================
 
   return (
+
     <div className="app">
 
-      {/* Sidebar */}
+
+      {/* =====================================
+          SIDEBAR
+      ===================================== */}
+
       <aside className="sidebar">
 
-        <div className="brand">
-          <div className="brand-icon">✦</div>
+        <div>
 
-          <div>
-            <h1>DocMind</h1>
-            <p>AI Document Intelligence</p>
+          <div className="brand">
+
+            <Logo
+              size={42}
+              showText={true}
+              dark={true}
+            />
+
           </div>
+
+
+          <button
+            className="new-chat"
+            onClick={
+              handleNewConversation
+            }
+          >
+
+            <span>＋</span>
+
+            New Conversation
+
+          </button>
+
+
+          <div className="sidebar-section">
+
+            <div className="section-title">
+              WORKSPACE
+            </div>
+
+
+            <button
+              className={`sidebar-item ${
+                activeView === "documents"
+                  ? "active"
+                  : ""
+              }`}
+              onClick={() =>
+                setActiveView(
+                  "documents"
+                )
+              }
+            >
+
+              <span>▣</span>
+
+              Documents
+
+            </button>
+
+
+            <button
+              className={`sidebar-item ${
+                activeView === "conversations"
+                  ? "active"
+                  : ""
+              }`}
+              onClick={() =>
+                setActiveView(
+                  "conversations"
+                )
+              }
+            >
+
+              <span>◫</span>
+
+              Conversations
+
+              {conversations.length > 0 && (
+
+                <span className="conversation-badge">
+
+                  {conversations.length}
+
+                </span>
+
+              )}
+
+            </button>
+
+          </div>
+
         </div>
 
-        <button
-          className="new-chat"
-          onClick={() => setMessages([])}
-        >
-          + New Conversation
-        </button>
-
-        <div className="sidebar-section">
-
-          <p className="section-title">
-            WORKSPACE
-          </p>
-
-          <div className="sidebar-item active">
-            <span>▣</span>
-            Documents
-          </div>
-
-          <div className="sidebar-item">
-            <span>◫</span>
-            Conversations
-          </div>
-
-        </div>
 
         <div className="sidebar-bottom">
 
           <div className="system-status">
 
-            <span className="status-dot"></span>
+            <span className="status-dot" />
 
             <div>
-              <strong>System Online</strong>
-              <small>RAG pipeline active</small>
+
+              <strong>
+                System Online
+              </strong>
+
+              <small>
+                RAG pipeline active
+              </small>
+
             </div>
 
           </div>
@@ -137,25 +890,35 @@ function App() {
       </aside>
 
 
-      {/* Main */}
+      {/* =====================================
+          MAIN
+      ===================================== */}
+
       <main className="main">
 
-        {/* Header */}
+
         <header className="topbar">
 
           <div>
+
             <p className="eyebrow">
               DOCUMENT WORKSPACE
             </p>
 
             <h2>
-              Ask your documents
+
+              {activeView === "documents"
+                ? "Ask your documents"
+                : "Your conversations"}
+
             </h2>
+
           </div>
+
 
           <div className="topbar-status">
 
-            <span className="status-dot"></span>
+            <span className="status-dot" />
 
             API Connected
 
@@ -164,336 +927,647 @@ function App() {
         </header>
 
 
-        <div className="content">
+        {/* =====================================
+            DOCUMENT WORKSPACE
+        ===================================== */}
 
-          {/* Upload */}
-          <section className="upload-section">
+        {activeView === "documents" && (
 
-            <div className="section-heading">
-
-              <div>
-                <p className="eyebrow">
-                  KNOWLEDGE BASE
-                </p>
-
-                <h3>
-                  Your Documents
-                </h3>
-              </div>
-
-              <span className="document-count">
-                {document
-                  ? "1 document"
-                  : "0 documents"}
-              </span>
-
-            </div>
+          <div className="content">
 
 
-            <label className="upload-box">
+            {/* =================================
+                DOCUMENT
+            ================================= */}
 
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={handleFileChange}
-                disabled={uploading}
-              />
+            <section className="upload-section">
 
-              <div className="upload-icon">
-                ↑
-              </div>
+              <div className="section-heading">
 
-              <h4>
-                {uploading
-                  ? "Processing document..."
-                  : "Upload a PDF"}
-              </h4>
+                <div>
 
-              <p>
-                {uploading
-                  ? "Extracting, chunking and indexing your document"
-                  : "Drag and drop your document here or click to browse"}
-              </p>
-
-              <span className="upload-format">
-                PDF files only
-              </span>
-
-            </label>
-
-
-            {file && (
-
-              <div className="document-card">
-
-                <div className="document-icon">
-                  PDF
-                </div>
-
-
-                <div className="document-info">
-
-                  <strong>
-                    {file.name}
-                  </strong>
-
-                  <span>
-                    {(file.size / 1024 / 1024).toFixed(2)} MB
-                  </span>
-
-                </div>
-
-
-                {uploading ? (
-
-                  <div className="processed">
-                    Processing...
-                  </div>
-
-                ) : document ? (
-
-                  <div className="processed">
-                    <span>✓</span>
-                    Processed
-                  </div>
-
-                ) : null}
-
-              </div>
-
-            )}
-
-
-            {error && (
-
-              <div className="error-message">
-                {error}
-              </div>
-
-            )}
-
-          </section>
-
-
-          {/* Chat */}
-          <section className="chat-section">
-
-            <div className="section-heading">
-
-              <div>
-
-                <p className="eyebrow">
-                  AI ASSISTANT
-                </p>
-
-                <h3>
-                  Conversation
-                </h3>
-
-              </div>
-
-            </div>
-
-
-            <div className="chat-window">
-
-              {messages.length === 0 ? (
-
-                <div className="empty-chat">
-
-                  <div className="ai-orb">
-                    ✦
-                  </div>
+                  <p className="section-title-light">
+                    KNOWLEDGE BASE
+                  </p>
 
                   <h3>
-                    Ask anything about your documents
+                    Your Documents
                   </h3>
 
+                </div>
+
+
+                <span className="document-count">
+
+                  {document
+                    ? "1 document"
+                    : "0 documents"}
+
+                </span>
+
+              </div>
+
+
+              {!document && (
+
+                <label className="upload-box">
+
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={
+                      handleFileChange
+                    }
+                    disabled={
+                      uploading
+                    }
+                  />
+
+
+                  <div className="upload-icon">
+
+                    {uploading
+                      ? "..."
+                      : "↑"}
+
+                  </div>
+
+
+                  <h4>
+
+                    {uploading
+                      ? "Processing document..."
+                      : "Upload a PDF"}
+
+                  </h4>
+
+
                   <p>
-                    Upload a document and ask questions
-                    in natural language. Answers are
-                    grounded in your documents.
+
+                    {uploading
+                      ? "Preparing your document for AI analysis"
+                      : "Drag and drop your document here or click to browse"}
+
                   </p>
 
 
-                  <div className="suggestions">
+                  <span className="upload-format">
+                    PDF files only
+                  </span>
 
-                    <button
-                      onClick={() =>
-                        setQuestion(
-                          "What is the objective of this project?"
-                        )
-                      }
-                    >
-                      What is the objective?
-                    </button>
+                </label>
+
+              )}
 
 
-                    <button
-                      onClick={() =>
-                        setQuestion(
-                          "Summarize this document"
-                        )
-                      }
-                    >
-                      Summarize the document
-                    </button>
+              {document && (
+
+                <div className="document-card">
+
+                  <div className="document-icon">
+                    PDF
+                  </div>
 
 
-                    <button
-                      onClick={() =>
-                        setQuestion(
-                          "What are the key points?"
-                        )
-                      }
-                    >
-                      Key points
-                    </button>
+                  <div className="document-info">
+
+                    <strong>
+                      {document.name}
+                    </strong>
+
+                    <span>
+
+                      {formatFileSize(
+                        document.size
+                      )}
+
+                    </span>
 
                   </div>
 
-                </div>
 
-              ) : (
-
-                <div className="messages">
-
-                  {messages.map(
-                    (message, index) => (
-
-                      <div
-                        className={`message ${message.type}`}
-                        key={index}
-                      >
-
-                        <div>
-                          {message.text}
-                        </div>
-
-
-                        {message.type ===
-                          "assistant" &&
-                          message.sources?.length >
-                            0 && (
-
-                            <div className="sources">
-
-                              <div className="sources-title">
-                                Sources
-                              </div>
-
-                              {message.sources.map(
-                                (source, sourceIndex) => (
-
-                                  <div
-                                    className="source-card"
-                                    key={sourceIndex}
-                                  >
-
-                                    <span>
-                                      📄
-                                    </span>
-
-                                    <div>
-
-                                      <strong>
-                                        {source.document}
-                                      </strong>
-
-                                      <small>
-                                        Page{" "}
-                                        {source.page}
-                                        {" • "}
-                                        Chunk{" "}
-                                        {source.chunk_id}
-                                      </small>
-
-                                    </div>
-
-                                  </div>
-
-                                )
-                              )}
-
-                            </div>
-
-                          )}
-
-                      </div>
-
-                    )
-                  )}
-
-
-                  {asking && (
-
-                    <div className="message assistant">
-                      Thinking...
-                    </div>
-
-                  )}
+                  <div className="processed">
+                    ✓ Ready to chat
+                  </div>
 
                 </div>
 
               )}
 
-            </div>
+
+              {document && (
+
+                <label className="change-document">
+
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={
+                      handleFileChange
+                    }
+                  />
+
+                  + Upload another document
+
+                </label>
+
+              )}
 
 
-            {/* Input */}
-            <div className="chat-input-wrapper">
+              {error && (
 
-              <input
-                type="text"
-                placeholder={
-                  document
-                    ? "Ask a question about your document..."
-                    : "Upload a document first..."
-                }
-                value={question}
-                disabled={asking}
-                onChange={(event) =>
-                  setQuestion(event.target.value)
-                }
-                onKeyDown={(event) => {
+                <div className="error-message">
+                  {error}
+                </div>
 
-                  if (
-                    event.key === "Enter"
-                  ) {
-                    handleAsk();
+              )}
+
+            </section>
+
+
+            {/* =================================
+                CHAT
+            ================================= */}
+
+            <section className="chat-section">
+
+              <div className="chat-header">
+
+                <div>
+
+                  <p className="section-title-light">
+                    AI ASSISTANT
+                  </p>
+
+                  <h3>
+                    Conversation
+                  </h3>
+
+                </div>
+
+
+                {conversationId && (
+
+                  <span className="conversation-id">
+                    Conversation #{conversationId}
+                  </span>
+
+                )}
+
+              </div>
+
+
+              <div
+                ref={chatWindowRef}
+                className={`chat-window ${
+                  messages.length
+                    ? "has-messages"
+                    : ""
+                }`}
+              >
+
+
+                {/* =================================
+                    EMPTY STATE
+                ================================= */}
+
+                {messages.length === 0 && (
+
+                  <div className="empty-chat">
+
+                    <div className="ai-orb">
+
+                      <Logo
+                        size={38}
+                        showText={false}
+                        dark={false}
+                      />
+
+                    </div>
+
+
+                    <h3>
+                      Ask anything about your documents
+                    </h3>
+
+
+                    <p>
+
+                      {document
+                        ? "Your document is ready. Ask a question and DocPilot will find the relevant information."
+                        : "Upload a document and ask questions in natural language. Answers are grounded in your documents."}
+
+                    </p>
+
+
+                    <div className="suggestions">
+
+                      {suggestions.map(
+                        (suggestion) => (
+
+                          <button
+                            key={suggestion}
+                            onClick={() =>
+                              handleAsk(
+                                suggestion
+                              )
+                            }
+                            disabled={
+                              !document ||
+                              !conversationId ||
+                              asking
+                            }
+                          >
+
+                            {suggestion}
+
+                          </button>
+
+                        )
+                      )}
+
+                    </div>
+
+                  </div>
+
+                )}
+
+
+                {/* =================================
+                    MESSAGES
+                ================================= */}
+
+                {messages.length > 0 && (
+
+                  <div className="messages">
+
+                    {messages.map(
+                      (message) => (
+
+                        <div
+                          key={message.id}
+                          className={`message-row ${
+                            message.role
+                          }`}
+                        >
+
+
+                          {message.role ===
+                            "assistant" && (
+
+                            <div className="message-avatar">
+
+                              <Logo
+                                size={27}
+                                showText={false}
+                                dark={false}
+                              />
+
+                            </div>
+
+                          )}
+
+
+                          <div
+                            className={`message ${
+                              message.role
+                            } ${
+                              message.isError
+                                ? "message-error"
+                                : ""
+                            }`}
+                          >
+
+                            <div className="message-content">
+
+                              {message.role ===
+                              "assistant" ? (
+
+                                <ReactMarkdown
+                                  remarkPlugins={[
+                                    remarkGfm
+                                  ]}
+                                >
+                                  {
+                                    message.content
+                                  }
+                                </ReactMarkdown>
+
+                              ) : (
+
+                                message.content
+
+                              )}
+
+                            </div>
+
+
+                            {message.role ===
+                              "assistant" &&
+                              message.sources?.length >
+                                0 && (
+
+                                <div className="sources">
+
+                                  <div className="sources-title">
+                                    Sources
+                                  </div>
+
+
+                                  {message.sources.map(
+                                    (
+                                      source,
+                                      index
+                                    ) => (
+
+                                      <div
+                                        className="source-card"
+                                        key={`${source.chunk_id}-${index}`}
+                                      >
+
+                                        <div className="document-icon">
+                                          PDF
+                                        </div>
+
+
+                                        <div>
+
+                                          <strong>
+                                            {
+                                              source.document
+                                            }
+                                          </strong>
+
+                                          <small>
+                                            Page{" "}
+                                            {
+                                              source.page
+                                            }
+                                          </small>
+
+                                        </div>
+
+                                      </div>
+
+                                    )
+                                  )}
+
+                                </div>
+
+                              )}
+
+                          </div>
+
+                        </div>
+
+                      )
+                    )}
+
+
+                    {/* =================================
+                        THINKING
+                    ================================= */}
+
+                    {asking && (
+
+                      <div className="message-row assistant">
+
+                        <div className="message-avatar">
+
+                          <Logo
+                            size={27}
+                            showText={false}
+                            dark={false}
+                          />
+
+                        </div>
+
+
+                        <div className="message assistant thinking">
+
+                          <span />
+                          <span />
+                          <span />
+
+                        </div>
+
+                      </div>
+
+                    )}
+
+
+                    <div
+                      ref={messagesEndRef}
+                    />
+
+                  </div>
+
+                )}
+
+              </div>
+
+
+              {/* =================================
+                  FIXED CHAT INPUT
+              ================================= */}
+
+              <div className="chat-input-wrapper">
+
+                <input
+                  ref={inputRef}
+                  value={question}
+                  onChange={(event) =>
+                    setQuestion(
+                      event.target.value
+                    )
                   }
+                  onKeyDown={
+                    handleKeyDown
+                  }
+                  placeholder={
+                    document
+                      ? "Ask anything about this document..."
+                      : "Upload a document to start asking questions..."
+                  }
+                  disabled={
+                    !document ||
+                    !conversationId ||
+                    asking
+                  }
+                />
 
-                }}
-              />
+
+                <button
+                  className="send-button"
+                  onClick={() =>
+                    handleAsk()
+                  }
+                  disabled={
+                    !document ||
+                    !conversationId ||
+                    !question.trim() ||
+                    asking
+                  }
+                  aria-label="Send message"
+                >
+
+                  {asking
+                    ? "..."
+                    : "↑"}
+
+                </button>
+
+              </div>
+
+
+              <p className="disclaimer">
+                Enter to send • AI responses are grounded in your documents
+              </p>
+
+            </section>
+
+          </div>
+
+        )}
+
+
+        {/* =====================================
+            CONVERSATIONS
+        ===================================== */}
+
+        {activeView === "conversations" && (
+
+          <div className="content">
+
+            <div className="section-heading">
+
+              <div>
+
+                <p className="section-title-light">
+                  HISTORY
+                </p>
+
+                <h3>
+                  Recent conversations
+                </h3>
+
+              </div>
 
 
               <button
-                className="send-button"
-                onClick={handleAsk}
-                disabled={
-                  asking ||
-                  !question.trim()
+                className="new-chat-page"
+                onClick={
+                  handleNewConversation
                 }
               >
-                ↑
+                ＋ New Conversation
               </button>
 
             </div>
 
 
-            <p className="disclaimer">
-              AI responses are generated from
-              your uploaded documents.
-            </p>
+            {conversations.length === 0 ? (
 
-          </section>
+              <div className="empty-history">
 
-        </div>
+                <div>
+                  ◫
+                </div>
+
+                <h3>
+                  No conversations yet
+                </h3>
+
+                <p>
+                  Start a conversation by
+                  uploading a document.
+                </p>
+
+                <button
+                  onClick={() =>
+                    setActiveView(
+                      "documents"
+                    )
+                  }
+                >
+                  Go to Documents
+                </button>
+
+              </div>
+
+            ) : (
+
+              <div className="conversation-list">
+
+                {conversations.map(
+                  (conversation) => (
+
+                    <div
+                      key={conversation.id}
+                      className="conversation-card"
+                      onClick={() =>
+                        openConversation(
+                          conversation
+                        )
+                      }
+                    >
+
+                      <div className="conversation-icon">
+                        ◫
+                      </div>
+
+
+                      <div className="conversation-info">
+
+                        <strong>
+                          {conversation.title ||
+                            "Untitled Conversation"}
+                        </strong>
+
+                        <span>
+                          {conversation.document_name ||
+                            "Document"}
+                        </span>
+
+                      </div>
+
+
+                      <button
+                        className="delete-conversation"
+                        onClick={(event) =>
+                          handleDeleteConversation(
+                            event,
+                            conversation.id
+                          )
+                        }
+                        aria-label="Delete conversation"
+                      >
+                        ×
+                      </button>
+
+
+                      <span className="conversation-arrow">
+                        →
+                      </span>
+
+                    </div>
+
+                  )
+                )}
+
+              </div>
+
+            )}
+
+          </div>
+
+        )}
 
       </main>
 
     </div>
   );
 }
+
 
 export default App;
