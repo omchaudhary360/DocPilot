@@ -20,6 +20,7 @@ ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://doc-pilot-nkmegjwei-om-chaudhary.vercel.app",
+     "https://doc-pilot-blond.vercel.app",
 ]
 
 app.add_middleware(
