@@ -1,11 +1,10 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.db.models.document import Document
     from app.db.models.message import Message
+    from app.db.models.document import Document
 
 from datetime import datetime
-
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,7 +26,7 @@ class Conversation(Base):
     )
 
     document_id: Mapped[int | None] = mapped_column(
-        ForeignKey("documents.id"),
+        ForeignKey("documents.id", ondelete="SET NULL"),
         nullable=True
     )
 
@@ -42,9 +41,12 @@ class Conversation(Base):
         onupdate=datetime.utcnow
     )
 
-    document: Mapped["Document | None"] = relationship()
-
     messages: Mapped[list["Message"]] = relationship(
         back_populates="conversation",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        lazy="select"
+    )
+
+    document: Mapped["Document | None"] = relationship(
+        lazy="select"
     )

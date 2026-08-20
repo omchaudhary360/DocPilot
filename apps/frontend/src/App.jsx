@@ -1,7 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-
 import "./App.css";
 
 import Logo from "./components/Logo";
@@ -74,9 +71,6 @@ function App() {
   const inputRef =
     useRef(null);
 
-  const chatWindowRef =
-    useRef(null);
-
 
   // =========================================
   // LOAD CONVERSATIONS
@@ -112,29 +106,22 @@ function App() {
 
 
   // =========================================
-  // AUTO SCROLL CHAT
+  // AUTO SCROLL
   // =========================================
 
   useEffect(() => {
 
-    const timer = setTimeout(() => {
+    const timer =
+      setTimeout(() => {
 
-      const chatWindow =
-        chatWindowRef.current;
-
-      if (chatWindow) {
-
-        chatWindow.scrollTo({
-          top: chatWindow.scrollHeight,
+        messagesEndRef.current?.scrollIntoView({
           behavior: "smooth",
+          block: "end",
         });
 
-      }
+      }, 50);
 
-    }, 50);
-
-    return () =>
-      clearTimeout(timer);
+    return () => clearTimeout(timer);
 
   }, [messages, asking]);
 
@@ -151,14 +138,8 @@ function App() {
       activeView === "documents"
     ) {
 
-      const timer = setTimeout(() => {
+      inputRef.current?.focus();
 
-        inputRef.current?.focus();
-
-      }, 100);
-
-      return () =>
-        clearTimeout(timer);
     }
 
   }, [
@@ -187,8 +168,6 @@ function App() {
       setError(
         "Please upload a PDF file."
       );
-
-      event.target.value = "";
 
       return;
     }
@@ -335,10 +314,9 @@ function App() {
       );
 
 
+      // Focus input immediately
       setTimeout(() => {
-
         inputRef.current?.focus();
-
       }, 100);
 
 
@@ -504,14 +482,14 @@ function App() {
 
 
     // =====================================
-    // CLEAR INPUT
+    // CLEAR INPUT IMMEDIATELY
     // =====================================
 
     setQuestion("");
 
 
     // =====================================
-    // USER MESSAGE
+    // ADD USER MESSAGE ONCE
     // =====================================
 
     const userMessage = {
@@ -601,6 +579,10 @@ function App() {
       );
 
 
+      // ===================================
+      // ERROR MESSAGE
+      // ===================================
+
       setMessages(
         (previous) => [
 
@@ -631,11 +613,9 @@ function App() {
 
       setAsking(false);
 
-
+      // Keep input ready
       setTimeout(() => {
-
         inputRef.current?.focus();
-
       }, 100);
 
     }
@@ -1118,7 +1098,6 @@ function App() {
 
 
               <div
-                ref={chatWindowRef}
                 className={`chat-window ${
                   messages.length
                     ? "has-messages"
@@ -1239,26 +1218,7 @@ function App() {
                           >
 
                             <div className="message-content">
-
-                              {message.role ===
-                              "assistant" ? (
-
-                                <ReactMarkdown
-                                  remarkPlugins={[
-                                    remarkGfm
-                                  ]}
-                                >
-                                  {
-                                    message.content
-                                  }
-                                </ReactMarkdown>
-
-                              ) : (
-
-                                message.content
-
-                              )}
-
+                              {message.content}
                             </div>
 
 

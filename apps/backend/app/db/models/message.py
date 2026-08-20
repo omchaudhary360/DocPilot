@@ -4,20 +4,9 @@ if TYPE_CHECKING:
     from app.db.models.conversation import Conversation
 
 from datetime import datetime
-
-from sqlalchemy import (
-    DateTime,
-    ForeignKey,
-    Integer,
-    Text,
-    String,
-    JSON,
-)
-from sqlalchemy.orm import (
-    Mapped,
-    mapped_column,
-    relationship,
-)
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import JSON
 
 from app.db.base import Base
 
@@ -32,19 +21,13 @@ class Message(Base):
     )
 
     conversation_id: Mapped[int] = mapped_column(
-        ForeignKey("conversations.id"),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
         nullable=False
     )
 
-    role: Mapped[str] = mapped_column(
-        String(20),
-        nullable=False
-    )
+    role: Mapped[str] = mapped_column(String(50))
 
-    content: Mapped[str] = mapped_column(
-        Text,
-        nullable=False
-    )
+    content: Mapped[str] = mapped_column(Text)
 
     sources: Mapped[list | None] = mapped_column(
         JSON,
@@ -57,5 +40,6 @@ class Message(Base):
     )
 
     conversation: Mapped["Conversation"] = relationship(
-        back_populates="messages"
+        back_populates="messages",
+        lazy="select"
     )

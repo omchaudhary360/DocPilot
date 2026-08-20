@@ -1,28 +1,57 @@
 import re
 
 
-def clean_text(text: str) -> str:
+def clean_text(text: str, preserve_structure: bool = True) -> str:
     """
-    Clean text extracted from a PDF.
+    Clean extracted text while preserving factual information.
+    
+    Removes:
+    - Excessive whitespace
+    - Common PDF artifacts
+    - Extra blank lines
+    
+    Preserves:
+    - Emails
+    - Phone numbers
+    - Dates
+    - Currency symbols and amounts
+    - Numbers and decimals
+    - IDs and codes
+    - Mathematical notation
+    - Table separators (| and -)
     """
-
-    # Remove common PDF bullet/artifact characters
+    
+    if not text:
+        return ""
+    
+    # Remove only specific problematic artifacts
+    # DO NOT remove currency/special characters unnecessarily
     text = text.replace("ò", " ")
-    text = text.replace("•", " ")
-
-    # Normalize whitespace
-    text = re.sub(r"[ \t]+", " ", text)
-
+    text = text.replace("\u00ad", "")  # Soft hyphen
+    
+    # Normalize tabs and multiple spaces (but not all spaces)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    
     # Remove spaces around newlines
-    text = re.sub(r" *\n *", "\n", text)
-
-    # Remove excessive blank lines
+    text = re.sub(r" +\n +", "\n", text)
+    text = re.sub(r"\n +", "\n", text)
+    text = re.sub(r" +\n", "\n", text)
+    
+    # Remove excessive blank lines but keep single newlines
     text = re.sub(r"\n{3,}", "\n\n", text)
-
-    # Clean each line
-    lines = [line.strip() for line in text.splitlines()]
-
-    # Remove empty lines at beginning/end
-    text = "\n".join(lines).strip()
-
+    
+    # Clean each line individually
+    lines = []
+    for line in text.splitlines():
+        # Remove leading/trailing spaces from each line
+        cleaned_line = line.strip()
+        if cleaned_line:
+            lines.append(cleaned_line)
+    
+    # Rejoin
+    text = "\n".join(lines)
+    
+    # Final trim
+    text = text.strip()
+    
     return text
